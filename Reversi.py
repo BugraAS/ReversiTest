@@ -1,10 +1,14 @@
 from abc import ABC,abstractmethod
 from itertools import chain
-from turtle import textinput
+from dataclasses import dataclass
+from network import Network
 import pyray as pr
 import numpy as np
 
-addr = ("<Server ip goes here>",5555)
+addr = ("<Server IP goes here>",5555)
+
+client = Network(addr)
+
 
 class Reversi:
     def __init__(self,winsize : np.ndarray) -> None:
@@ -45,6 +49,7 @@ class Reversi:
         pr.set_window_position(int(self.winpos.x),int(self.winpos.y))
 
     def logicops(self) -> None:
+        texts.var[0] = pr.get_time()
         pass
 
     def eventops(self) -> None:
@@ -66,6 +71,14 @@ class Reversi:
             self.logicops()
             self.render()
         pr.close_window()
+
+@dataclass
+class StrHolder:
+    var = ["" , "", "", ""]
+    def set(self,index :int, arg):
+        self.var[index] = arg
+        return arg
+texts = StrHolder()
 
 class ScreenMeta(type):
     def __getitem__(cls,key=None):
@@ -125,13 +138,24 @@ class TextItem(UiItem):
     def render(self):
         pr.draw_text(self.props[0],self.pos[0],self.pos[1],self.props[1],self.props[2])
 class FormattedText(TextItem):
-    def __init__(self, pos, text: str, size: int, color: pr.Color,variable) -> None:
+    def __init__(self, pos, text: str, size: int, color: pr.Color,holder : StrHolder,index :int) -> None:
         super().__init__(pos, text, size, color)
-        self.var = variable
+        self.var = holder
+        self.index = index
     def render(self):
-        pr.draw_text(self.props[0].format(self.var),self.pos[0],self.pos[1],self.props[1],self.props[2])
-
-
+        pr.draw_text(self.props[0].format(self.var.var[self.index]),self.pos[0],self.pos[1],self.props[1],self.props[2])
+class OthelloBoard(BoxItem):
+    def __init__(self, pos, dim, colors) -> None:
+        super().__init__((pos[0]-10,pos[1]-10), (dim+20,dim+20))
+        self.board = pr.Rectangle(pos[0],pos[1],dim,dim)
+        self.cellsize = dim / 8
+        self.color = colors
+        self.state = np.zeros((8,8),dtype=np.int8)
+        self.position : pr.Vector2
+    def render(self):
+        pr.draw_rectangle_rec(self.box,self.color[0])
+        pr.draw_rectangle_rec(self.board,self.color[1])
+        self.position = pr.gui_grid(self.board,self.cellsize,1)
 # Unused class
 #class KeyIter:
 #    def __init__(self,func) -> None:
@@ -144,8 +168,6 @@ class FormattedText(TextItem):
 #        if self.i == 0:raise StopIteration
 #        return self.i
 
-message = pr.get_time
-
 mainmenu : Screen = Screen(
     lambda x: (x.render() if hasattr(x,"render") else None),
     (
@@ -153,13 +175,25 @@ mainmenu : Screen = Screen(
         TextItem((25,125),"OTHELLO",7,pr.BLACK)
     ),
     (
-        ClickButton((15,165),(150,50),f"This is a {message()}",lambda:Screen.setState(1)),
+        ClickButton((15,165),(150,50),"This is a Button",lambda:Screen.setState(1)),
     )
 )
 serverScreen : Screen = Screen(
     lambda x : (x.render() if hasattr(x,"render") else None),
     (
-        TextItem((300,250),"This is an empty Screen",10,pr.BLACK),
+        FormattedText((50,250),"Current time is {}",10,pr.BLACK,texts,1),
+    ),
+    (
+        ClickButton((30,50),(150,50),"Attempt Connection",lambda:Screen.setState(2) if texts.set(1,client.handshake()) else None ),
+    )
+)
+othello : Screen = Screen(
+    lambda:None,
+    (
+        FormattedText((50,50),"Server response: {}",10,pr.BLACK,texts,1),
+    ),
+    (
+        OthelloBoard((250,75),320,(pr.DARKBROWN,pr.DARKGRAY)),
     )
 )
 
