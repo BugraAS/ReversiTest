@@ -1,17 +1,21 @@
 from abc import ABC,abstractmethod
+from itertools import chain
+from turtle import textinput
 import pyray as pr
 import numpy as np
 
+addr = ("<Server ip goes here>",5555)
+
 class Reversi:
     def __init__(self,winsize : np.ndarray) -> None:
-        self.state = 0
+        self.board = np.zeros((8,8),dtype=np.int8)
         self.exit = False
         self.windim = winsize
         self.winpos = pr.Vector2(0,0)
         self.mousepos = pr.Vector2(0,0)
         self.panoffset = pr.Vector2(0,0)
         self.dragging = False
-        self.guipos : pr.Vector2
+        self.gridpos = pr.Vector2(-1,-1)
         self.bgrect = pr.Rectangle(3,26,winsize[0]-6,winsize[1]-29)
         self.colors = (
             pr.WHITE,
@@ -25,14 +29,13 @@ class Reversi:
 
     def render(self) -> None:
         pr.begin_drawing()
-        pr.clear_background(self.bgcolor)
         self.exit = pr.gui_window_box(pr.Rectangle(0,0,self.windim[0],self.windim[1]),"#198#TestWindow")
-        pr.draw_text(f"the states are {pr.gui_get_state()}",200,200,10,self.colors[2])
+        pr.clear_background(self.bgcolor)
         pr.draw_rectangle_rec(self.bgrect,self.bgcolor)
         pr.draw_rectangle_lines_ex(self.bgrect,9.,self.colors[5])
-        self.gridpos = pr.gui_grid(pr.Rectangle(100,100,320,320),40.,1)
-        pr.draw_text(f"Grid pos is {self.gridpos.x} {self.gridpos.y}",250,30,10,self.colors[2])
-        Screen[self.state].render(self)
+        self.gridpos = pr.gui_grid(pr.Rectangle(250,75,320,320),40.,1)
+        pr.draw_text(f"Grid pos is {self.gridpos.x} {self.gridpos.y}",150,40,10,self.colors[2])
+        Screen[None].render()
         pr.end_drawing()
     
     def drag(self) ->None:
@@ -65,22 +68,24 @@ class Reversi:
         pr.close_window()
 
 class ScreenMeta(type):
-    def __getitem__(cls,val):
-        return cls.screens[val]
+    def __getitem__(cls,key=None):
+        return cls.screens[Screen.state]
 
-class Screen(ABC,metaclass=ScreenMeta):
+class Screen(metaclass=ScreenMeta):
     screens = []
-    def __init__(self, rendfunc, boxes, text, clickables) -> None:
+    state = 0
+    def __init__(self, rendfunc, *args) -> None:
         self.func = rendfunc
-        self.box = boxes
-        self.text = text
-        self.button = clickables
+        self.objects = [*args]
         Screen.screens.append(self)
-    def render(self, arg:Reversi) -> None:
-        self.func(self)
-        self.boxes.render()
-        self.text.render()
-        self.button.render(arg)
+    def render(self) -> None:
+        for i in chain.from_iterable(self.objects):
+            if self.func(i):
+                i.handle()
+                break
+    @staticmethod
+    def setState(arg : int):
+        Screen.state = arg
 
 class UiItem(ABC):
     def __init__(self,pos) -> None:
@@ -98,15 +103,13 @@ class BoxItem(UiItem,ABC):
         pass
 
 class ClickButton(BoxItem):
-    def __init__(self, pos, dims, label :str, handler :function) -> None:
+    def __init__(self, pos, dims, label :str, handler) -> None:
         super().__init__(pos, dims)
         self.str = label
         self.state : bool
-        self._handler = handler
-    def render(self, arg: Reversi) -> None:
-        self.state = pr.gui_button(self.box,self.str)
-        if self.state: self.handler(arg)
-        return self.state
+        self.handle = handler
+    def render(self) -> None:
+        return pr.gui_button(self.box,self.str)
 
 class Rectangle(BoxItem):
     def __init__(self, pos, dims, color : pr.Color) -> None:
@@ -116,8 +119,17 @@ class Rectangle(BoxItem):
         pr.draw_rectangle_rec(self.box,self.color)
 
 class TextItem(UiItem):
-    def __init__(self, pos, size:int, color: pr.Color) -> None:
+    def __init__(self, pos,text:str, size:int, color: pr.Color) -> None:
         super().__init__(pos)
+        self.props = (text,size,color)
+    def render(self):
+        pr.draw_text(self.props[0],self.pos[0],self.pos[1],self.props[1],self.props[2])
+class FormattedText(TextItem):
+    def __init__(self, pos, text: str, size: int, color: pr.Color,variable) -> None:
+        super().__init__(pos, text, size, color)
+        self.var = variable
+    def render(self):
+        pr.draw_text(self.props[0].format(self.var),self.pos[0],self.pos[1],self.props[1],self.props[2])
 
 
 # Unused class
@@ -132,16 +144,26 @@ class TextItem(UiItem):
 #        if self.i == 0:raise StopIteration
 #        return self.i
 
-noop = lambda *args,**kargs:None
+message = pr.get_time
+
 mainmenu : Screen = Screen(
-    noop ,
-    [
-        ClickButton([50,250],[150,75],"Start")
-    ],
-    [
-        lambda *args:None
-    ]
+    lambda x: (x.render() if hasattr(x,"render") else None),
+    (
+        Rectangle((15,100),(150,50),pr.DARKGRAY),
+        TextItem((25,125),"OTHELLO",7,pr.BLACK)
+    ),
+    (
+        ClickButton((15,165),(150,50),f"This is a {message()}",lambda:Screen.setState(1)),
+    )
 )
+serverScreen : Screen = Screen(
+    lambda x : (x.render() if hasattr(x,"render") else None),
+    (
+        TextItem((300,250),"This is an empty Screen",10,pr.BLACK),
+    )
+)
+
+
 
 if __name__ == "__main__":
     begin : Reversi = Reversi(np.array([600,450]))
