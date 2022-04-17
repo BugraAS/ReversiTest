@@ -1,4 +1,6 @@
 # Reversi2
+This repo was made for a school project which was ultimately abandoned.  
+  
 How to use:
     - This code requires raylib which you can download using "pip install raylib"
     - Replace ip adress on the headers of the Reversi.py and Server.py
